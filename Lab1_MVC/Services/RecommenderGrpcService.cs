@@ -1,6 +1,7 @@
 // Services/RecommenderGrpcService.cs
 // Implementarea serviciului din recommender.proto.
 // Recommender.RecommenderBase este generata la build din fisierul .proto (folderul obj).
+
 using BibliotecaGrpc;
 using Lab1_MVC.Data;
 using Lab1_MVC.Models;
@@ -13,24 +14,26 @@ public class RecommenderGrpcService(
     LibraryContext db,
     ILogger<RecommenderGrpcService> logger) : Recommender.RecommenderBase
 {
-   
     public override async Task<RecommendReply> Recommend(
         RecommendRequest request, ServerCallContext context)
     {
+        ValidateRequest(request);
+
         var list = await recs.RecommendAsync(
             request.ReaderId, request.Top, context.CancellationToken);
 
         var reply = new RecommendReply();
-        reply.Books.AddRange(list.Select(ToMessage));   
+        reply.Books.AddRange(list.Select(ToMessage));
         return reply;
     }
 
-    
     public override async Task StreamRecommendations(
         RecommendRequest request,
         IServerStreamWriter<BookScore> responseStream,
         ServerCallContext context)
     {
+        ValidateRequest(request);
+
         var list = await recs.RecommendAsync(
             request.ReaderId, request.Top, context.CancellationToken);
 
@@ -42,7 +45,6 @@ public class RecommenderGrpcService(
         }
     }
 
-  
     public override async Task<RateSummary> RateBooks(
         IAsyncStreamReader<RatingInput> requestStream, ServerCallContext context)
     {
@@ -75,25 +77,30 @@ public class RecommenderGrpcService(
         };
     }
 
-    private static BookScore ToMessage(Recommendation r) => new()
+    // --- Metode ajutătoare ---
+
+    private static void ValidateRequest(RecommendRequest request)
     {
-        BookId = r.BookId,
-        Title = r.Title,
-        Score = r.Score,
-        Fallback = r.Fallback
-    };
+        if (request.ReaderId <= 0)
+            throw new RpcException(new Status(StatusCode.InvalidArgument,
+                "reader_id trebuie să fie un număr pozitiv."));
+
+        if (request.Top > 20)
+            throw new RpcException(new Status(StatusCode.InvalidArgument,
+                "top poate fi cel mult 20."));
+    }
+
     private static BookScore ToMessage(Recommendation r) => new()
     {
         BookId = r.BookId,
         Title = r.Title,
         Score = r.Score,
         Fallback = r.Fallback,
-        Label = Eticheta(r)
+        Label = r.Label
     };
 
-  
-    private const float PragFoarte = 4.0;       
-    private const float PragRecomandata = 3.0;  
+    private const float PragFoarte = 4.0f;
+    private const float PragRecomandata = 3.0f;
 
     private static string Eticheta(Recommendation r) =>
         r.Fallback ? "Populară (cititor nou)"
