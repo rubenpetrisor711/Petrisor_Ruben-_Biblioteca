@@ -3,12 +3,15 @@ using System.ComponentModel;
 using Microsoft.EntityFrameworkCore;
 using Lab1_MVC.Data;
 using Lab1_MVC.Services;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 public record BookInfo(int Id, string Title, string? Author, string? Genre, int Year, decimal Price);
 
 public record BookDetails(int Id, string Title, string? Author, string? Genre, int Year,
                           decimal Price, string? Description, int Orders);
+
+public record MostOrderedBook(int Id, string Title, string? Author, int Orders);
 
 [McpServerToolType]
 public class LibraryTools
@@ -17,7 +20,7 @@ public class LibraryTools
     [Description("Cauta carti in catalogul Bibliotecii dupa un cuvant din titlu sau din numele autorului. " +
                  "Intoarce cel mult 10 carti, cu ID, titlu, autor, gen, an si pret.")]
     public static async Task<List<BookInfo>> SearchBooks(
-        LibraryContext db,                                    
+        LibraryContext db,
         [Description("Cuvantul cautat, de exemplu 'Rebreanu' sau 'Ion'.")] string query,
         CancellationToken ct)
     {
@@ -98,5 +101,38 @@ public class LibraryTools
                 b.Author == null ? null : b.Author.FirstName + " " + b.Author.LastName,
                 b.Genre == null ? null : b.Genre.Name, b.Year, b.Price))
             .ToListAsync(ct);
+    }
+
+    // ---------- Î9 · S2 · varianta B2 ----------
+    [McpServerTool(Name = "most_ordered_books", ReadOnly = true, Destructive = false, OpenWorld = false)]
+    [Description("Intoarce cele mai comandate carti din biblioteca, ordonate descrescator dupa numarul de comenzi. " +
+                 "Cel mult 10 rezultate, cu ID, titlu, autor si numarul de comenzi.")]
+    public static async Task<List<MostOrderedBook>> MostOrderedBooks(
+        LibraryContext db,
+        [Description("Cate carti sa intoarca, un numar intreg intre 1 si 10. Implicit 5.")] int top = 5,
+        CancellationToken ct = default)
+    {
+        if (top < 1 || top > 10)
+            throw new McpException(
+                $"Parametrul top={top} este in afara limitelor. Reapeleaza tool-ul cu o valoare intre 1 si 10.");
+
+        var rows = await db.Book.AsNoTracking()
+            .Select(b => new
+            {
+                b.ID,
+                b.Title,
+                Author = b.Author == null ? null : b.Author.FirstName + " " + b.Author.LastName,
+                Orders = b.Orders.Count()
+            })
+            .Where(x => x.Orders > 0)
+            .OrderByDescending(x => x.Orders)
+            .ThenBy(x => x.Title)
+            .Take(top)
+            .ToListAsync(ct);
+
+        if (rows.Count == 0)
+            throw new McpException("Nu exista nicio comanda in baza de date, deci nu pot calcula un top.");
+
+        return rows.Select(x => new MostOrderedBook(x.ID, x.Title, x.Author, x.Orders)).ToList();
     }
 }
