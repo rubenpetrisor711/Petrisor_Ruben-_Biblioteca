@@ -1,0 +1,42 @@
+@model Order
+
+@{
+    ViewData["Title"] = "Edit";
+}
+
+<h1>Edit</h1>
+
+<h4>Comandă</h4>
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="Edit">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <input type="hidden" asp-for="OrderID" />
+            <div class="form-group mb-3">
+                <label asp-for="CustomerID" class="control-label">Cititor</label>
+                <select asp-for="CustomerID" class="form-control" asp-items='(SelectList)ViewData["CustomerID"]'></select>
+            </div>
+            <div class="form-group mb-3">
+                <label asp-for="BookID" class="control-label">Carte</label>
+                <select asp-for="BookID" class="form-control" asp-items='(SelectList)ViewData["BookID"]'></select>
+            </div>
+            <div class="form-group mb-3">
+                <label asp-for="OrderDate" class="control-label">Data</label>
+                <input asp-for="OrderDate" class="form-control" type="date" />
+                <span asp-validation-for="OrderDate" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <input type="submit" value="Save" class="btn btn-primary" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="Index">Înapoi la listă</a>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}

@@ -1,0 +1,56 @@
+@model AuthorDetailsViewModel
+
+@{
+    ViewData["Title"] = "Detalii autor";
+}
+
+<h1>Detalii autor</h1>
+
+<div>
+    <h4>@Model.Author.FullName</h4>
+    <hr />
+    <dl class="row">
+        <dt class="col-sm-3">Prenume</dt>
+        <dd class="col-sm-9">@Model.Author.FirstName</dd>
+        <dt class="col-sm-3">Nume</dt>
+        <dd class="col-sm-9">@Model.Author.LastName</dd>
+        <dt class="col-sm-3">FullName</dt>
+        <dd class="col-sm-9">@Html.DisplayFor(m => m.Author.FullName)</dd>
+        <dt class="col-sm-3">Comenzi (toate cărțile)</dt>
+        <dd class="col-sm-9">@Model.TotalOrders</dd>
+        <dt class="col-sm-3">Prima și ultima carte</dt>
+        <dd class="col-sm-9">
+            @if (Model.FirstYear != null)
+            {
+                @:@Model.FirstYear – @Model.LastYear
+            }
+            else
+            {
+                @:fără cărți
+            }
+        </dd>
+    </dl>
+</div>
+
+<h5>Cărțile autorului</h5>
+<table class="table table-sm">
+    <thead>
+    <tr><th>Titlu</th><th>Gen</th><th>Preț</th><th>Comenzi</th></tr>
+    </thead>
+    <tbody>
+    @foreach (var b in Model.Books)
+    {
+        <tr>
+            <td><a asp-controller="Books" asp-action="Details" asp-route-id="@b.ID">@b.Title</a></td>
+            <td>@b.Genre</td>
+            <td>@b.Price.ToString("0.00")</td>
+            <td>@b.Orders</td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+<div>
+    <a asp-action="Edit" asp-route-id="@Model.Author.ID">Edit</a> |
+    <a asp-action="Index">Înapoi la listă</a>
+</div>
