@@ -1,0 +1,19 @@
+﻿@model BibliotecaGrpc.RatingItem
+@{ ViewData["Title"] = "Editează evaluarea"; }
+
+<h1>Editează nota pentru „@Model.Title”</h1>
+
+@if (ViewBag.Error is not null)
+{
+    <div class="alert alert-danger">@ViewBag.Error</div>
+}
+
+<form asp-action="Edit" method="post">
+    <input type="hidden" name="id" value="@Model.Id" />
+    <div class="mb-2">
+        <label class="form-label">Nota (1–5)</label>
+        <input name="stars" value="@Model.Stars" class="form-control" />
+    </div>
+    <button class="btn btn-primary">Salvează</button>
+    <a asp-action="Index">Înapoi</a>
+</form>

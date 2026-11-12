@@ -16,6 +16,7 @@
   <ItemGroup>
     <!-- GrpcServices="Client": se generează RecommenderClient, nu și clasa de bază a serverului -->
     <Protobuf Include="Protos\recommender.proto" GrpcServices="Client" />
+	  <Protobuf Include="Protos\ratings.proto" GrpcServices="Server" />
   </ItemGroup>
 
 </Project>

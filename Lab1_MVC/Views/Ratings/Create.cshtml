@@ -1,0 +1,26 @@
+﻿@model BibliotecaGrpc.NewRating
+@{ ViewData["Title"] = "Adaugă evaluare"; }
+
+<h1>Evaluare nouă</h1>
+
+@if (ViewBag.Error is not null)
+{
+    <div class="alert alert-danger">@ViewBag.Error</div>
+}
+
+<form asp-action="Create" method="post">
+    <div class="mb-2">
+        <label class="form-label">ID cititor</label>
+        <input name="ReaderId" value="@Model.ReaderId" class="form-control" />
+    </div>
+    <div class="mb-2">
+        <label class="form-label">ID carte</label>
+        <input name="BookId" value="@Model.BookId" class="form-control" />
+    </div>
+    <div class="mb-2">
+        <label class="form-label">Nota (1–5)</label>
+        <input name="Stars" value="@Model.Stars" class="form-control" />
+    </div>
+    <button class="btn btn-primary">Salvează</button>
+    <a asp-action="Index" asp-route-readerId="@Model.ReaderId">Înapoi</a>
+</form>

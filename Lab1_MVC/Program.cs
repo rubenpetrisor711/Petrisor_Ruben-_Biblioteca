@@ -10,14 +10,15 @@ using OpenAI;
 using System.ClientModel;
 using Lab1_MVC.Services;
 using OllamaSharp;
+using BibliotecaGrpc;
 
 var builder = WebApplication.CreateBuilder(args);
+
 builder.Services.AddDbContext<LibraryContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("LibraryContext") ?? throw new InvalidOperationException("Connection string 'LibraryContext' not found.")));
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
-
 builder.Services
     .AddPredictionEnginePool<BookRating, BookRatingPrediction>()
     .FromFile(modelName: "BookRecommender",
@@ -25,14 +26,11 @@ builder.Services
         watchForChanges: true);
 
 builder.Services.AddValidation();
-
 builder.Services.AddGrpc();
 builder.Services.AddScoped<RecommendationService>();
-
 builder.Services.AddOpenApi();
 
 var endpoint = new Uri("http://localhost:11434/v1");
-
 IChatClient chat = new OpenAIClient(new ApiKeyCredential("ollama"),
         new OpenAIClientOptions { Endpoint = endpoint })
     .GetChatClient("gemma3:4b")
@@ -48,8 +46,19 @@ builder.Services.AddMcpServer()
 // generatorul de embeddings: transforma un text intr-un vector, cu modelul embeddinggemma din Ollama
 builder.Services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(
     new OllamaApiClient(new Uri("http://localhost:11434"), "embeddinggemma"));
+
 // indexul cu regulamentul si descrierile cartilor (un singur exemplar, tinut in memorie)
 builder.Services.AddSingleton<DocumentIndex>();
+
+builder.Services.AddGrpcClient<Recommender.RecommenderClient>(o =>
+{
+    o.Address = new Uri(builder.Configuration["Biblioteca:GrpcAddress"]!);
+});
+
+builder.Services.AddGrpcClient<ReaderRatings.ReaderRatingsClient>(o =>
+{
+    o.Address = new Uri(builder.Configuration["Biblioteca:GrpcAddress"]!);
+});
 
 var app = builder.Build();
 
@@ -61,6 +70,7 @@ if (app.Environment.IsDevelopment())
 
 app.MapLibraryApi();
 app.MapGrpcService<RecommenderGrpcService>();
+app.MapGrpcService<ReaderRatingsGrpcService>();
 app.MapMcp("/mcp");
 
 // Același serviciu de recomandare, expus și prin REST (pentru comparație cu gRPC)
@@ -115,9 +125,7 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
-
 app.UseRouting();
-
 app.UseAuthorization();
 
 app.MapControllerRoute(

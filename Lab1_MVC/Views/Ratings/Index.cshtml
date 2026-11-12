@@ -1,0 +1,38 @@
+﻿@model RatingsViewModel
+@{ ViewData["Title"] = "Evaluările mele"; }
+
+<h1>Evaluările unui cititor</h1>
+
+<form asp-action="Index" method="get" class="row g-2 mb-3">
+    <div class="col-auto">
+        <label class="form-label">ID cititor</label>
+        <input name="readerId" value="@Model.ReaderId" class="form-control" />
+    </div>
+    <div class="col-auto align-self-end">
+        <button class="btn btn-primary">Afișează</button>
+        <a asp-action="Create" asp-route-readerId="@Model.ReaderId" class="btn btn-success">Adaugă</a>
+    </div>
+</form>
+
+@if (Model.Error is not null)
+{
+    <div class="alert alert-danger">@Model.Error</div>
+}
+
+<table class="table">
+    <thead><tr><th>Carte</th><th>Nota</th><th>Data</th><th></th></tr></thead>
+    <tbody>
+    @foreach (var r in Model.Ratings)
+    {
+        <tr>
+            <td>@r.Title</td>
+            <td>@r.Stars</td>
+            <td>@r.CreatedAt.ToDateTime().ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+            <td>
+                <a asp-action="Edit" asp-route-id="@r.Id">Editează</a> |
+                <a asp-action="Delete" asp-route-id="@r.Id">Șterge</a>
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
