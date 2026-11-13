@@ -1,5 +1,3 @@
-// Colectia vectoriala a Bibliotecii (in memorie): regulamentul + descriere carti.
-// Se construieste o data, la pornirea aplicatiei 
 using CommunityToolkit.VectorData.InMemory;
 using Lab1_MVC.Data;
 using Microsoft.EntityFrameworkCore;
@@ -8,8 +6,8 @@ using Microsoft.Extensions.VectorData;
 
 public class DocumentIndex
 {
-    //Misiunea 3 Partea B: schimbați modul si reporniti Biblioteca
-    public const string ChunkMode = "sectiuni";          // "document" | "sectiuni" | "propozitii"
+ 
+    public const string ChunkMode = "sectiuni";        
 
     private readonly VectorStoreCollection<string, DocumentChunk> _collection;
     private readonly ILogger<DocumentIndex> _log;
@@ -27,7 +25,7 @@ public class DocumentIndex
     {
         await _collection.EnsureCollectionExistsAsync(ct);
 
-        // 1. regulamentul impartit in fragmente
+       
         var parts = Chunker.Split(await File.ReadAllTextAsync(regulamentPath, ct), ChunkMode);
         for (int i = 0; i < parts.Count; i++)
         {
@@ -37,16 +35,18 @@ public class DocumentIndex
                 Source = "regulament",
                 Title = parts[i].Title,
                 Text = parts[i].Text,
-                Embedding = parts[i].Text         
+                Embedding = parts[i].Text
             }, ct);
         }
 
-        // 2. descrierile cartilor din baza de date (cate un fragment pe carte)
+        
         var books = await db.Book.AsNoTracking()
             .Where(b => b.Description != null)
             .Select(b => new
             {
-                b.ID, b.Title, b.Description,
+                b.ID,
+                b.Title,
+                b.Description,
                 Author = b.Author == null ? "" : b.Author.FirstName + " " + b.Author.LastName,
                 Genre = b.Genre == null ? "" : b.Genre.Name
             })
@@ -82,4 +82,40 @@ public class DocumentIndex
                                      Math.Round(r.Score ?? 0, 3)));
         return hits;
     }
+
+
+    public async Task IndexBookAsync(LibraryContext db, int bookId, CancellationToken ct = default)
+    {
+        var b = await db.Book.AsNoTracking()
+            .Where(x => x.ID == bookId)
+            .Select(x => new
+            {
+                x.ID,
+                x.Title,
+                x.Description,
+                Author = x.Author == null ? "" : x.Author.FirstName + " " + x.Author.LastName,
+                Genre = x.Genre == null ? "" : x.Genre.Name
+            })
+            .FirstOrDefaultAsync(ct);
+
+        if (b is null || string.IsNullOrWhiteSpace(b.Description))
+        {
+            await RemoveBookAsync(bookId, ct);   
+            return;
+        }
+
+        var text = $"{b.Title}, de {b.Author} ({b.Genre}). {b.Description}";
+        await _collection.UpsertAsync(new DocumentChunk
+        {
+            Id = $"carte-{b.ID}",                
+            Source = "carte",
+            Title = $"{b.Title} (ID {b.ID})",
+            Text = text,
+            Embedding = text
+        }, ct);
+    }
+
+  
+    public Task RemoveBookAsync(int bookId, CancellationToken ct = default)
+        => _collection.DeleteAsync($"carte-{bookId}", ct);
 }

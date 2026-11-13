@@ -96,7 +96,7 @@ public class RecommenderGrpcService(
         Title = r.Title,
         Score = r.Score,
         Fallback = r.Fallback,
-        Label = r.Label
+        Label = r.label
     };
 
     private const float PragFoarte = 4.0f;

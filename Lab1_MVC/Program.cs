@@ -14,11 +14,17 @@ using BibliotecaGrpc;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ==========================================
+// 1. CONFIGURARE SERVICII (DI)
+// ==========================================
+
 builder.Services.AddDbContext<LibraryContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("LibraryContext") ?? throw new InvalidOperationException("Connection string 'LibraryContext' not found.")));
+    options.UseSqlite(builder.Configuration.GetConnectionString("LibraryContext")
+        ?? throw new InvalidOperationException("Connection string 'LibraryContext' not found.")));
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+
 builder.Services
     .AddPredictionEnginePool<BookRating, BookRatingPrediction>()
     .FromFile(modelName: "BookRecommender",
@@ -30,6 +36,7 @@ builder.Services.AddGrpc();
 builder.Services.AddScoped<RecommendationService>();
 builder.Services.AddOpenApi();
 
+// Configurare Client AI (Ollama prin OpenAI Client Compatibility)
 var endpoint = new Uri("http://localhost:11434/v1");
 IChatClient chat = new OpenAIClient(new ApiKeyCredential("ollama"),
         new OpenAIClientOptions { Endpoint = endpoint })
@@ -42,31 +49,74 @@ builder.Services.AddMcpServer()
     .WithHttpTransport()
     .WithToolsFromAssembly();
 
-// ===== Î8: RAG (cautare dupa sens) =====
-// generatorul de embeddings: transforma un text intr-un vector, cu modelul embeddinggemma din Ollama
+// ===== RAG (căutare după sens) =====
+// generatorul de embeddings: transformă un text într-un vector, cu modelul embeddinggemma din Ollama
 builder.Services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(
     new OllamaApiClient(new Uri("http://localhost:11434"), "embeddinggemma"));
 
-// indexul cu regulamentul si descrierile cartilor (un singur exemplar, tinut in memorie)
+// indexul cu regulamentul și descrierile cărților (un singur exemplar, ținut în memorie)
 builder.Services.AddSingleton<DocumentIndex>();
 
+// Configurare clienți gRPC externi
 builder.Services.AddGrpcClient<Recommender.RecommenderClient>(o =>
 {
-    o.Address = new Uri(builder.Configuration["Biblioteca:GrpcAddress"]!);
+    o.Address = new Uri(builder.Configuration["Biblioteca:GrpcAddress"]
+        ?? throw new InvalidOperationException("Configurarea 'Biblioteca:GrpcAddress' lipsește."));
 });
 
 builder.Services.AddGrpcClient<ReaderRatings.ReaderRatingsClient>(o =>
 {
-    o.Address = new Uri(builder.Configuration["Biblioteca:GrpcAddress"]!);
+    o.Address = new Uri(builder.Configuration["Biblioteca:GrpcAddress"]
+        ?? throw new InvalidOperationException("Configurarea 'Biblioteca:GrpcAddress' lipsește."));
 });
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+// ==========================================
+// 2. INITIALIZARE BAZA DE DATE & RAG INDEX
+// ==========================================
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<LibraryContext>();
+    db.Database.Migrate();
+    LibrarySeed.Seed(db);
+    LibrarySeed.SeedRatings(db);
+}
+
+// Construim indexul o singură dată, la pornire.
+// Trebuie după Migrate/Seed, ca să existe cărțile în baza de date.
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<LibraryContext>();
+    var index = scope.ServiceProvider.GetRequiredService<DocumentIndex>();
+    await index.BuildAsync(db, Path.Combine(app.Environment.ContentRootPath, "Docs", "regulament.md"));
+}
+
+// ==========================================
+// 3. PIPELINE-UL HTTP (MIDDLEWARE)
+// ==========================================
+
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/Home/Error");
+    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+    app.UseHsts();
+}
+else
 {
     app.MapOpenApi();
     app.MapScalarApiReference();
 }
+
+app.UseHttpsRedirection();
+app.UseStaticFiles();
+app.UseRouting();
+app.UseAuthorization();
+
+// ==========================================
+// 4. MAPARE RUTE ȘI ENDPOINT-URI
+// ==========================================
 
 app.MapLibraryApi();
 app.MapGrpcService<RecommenderGrpcService>();
@@ -86,8 +136,8 @@ app.MapPost("/api/v2/books/{id:int}/pitch", async (int id, LibraryContext db, IC
 
     List<ChatMessage> messages =
     [
-        new(ChatRole.System, "Esti bibliotecar. Raspunde in romana, in cel mult 2 propozitii."),
-        new(ChatRole.User, $"Recomanda „{b.Title}” de {b.Author?.FullName} " +
+        new(ChatRole.System, "Ești bibliotecar. Răspunde în română, în cel mult 2 propoziții."),
+        new(ChatRole.User, $"Recomandă „{b.Title}” de {b.Author?.FullName} " +
                            $"({b.Genre?.Name}). Descriere: {b.Description}")
     ];
 
@@ -98,36 +148,7 @@ app.MapPost("/api/v2/books/{id:int}/pitch", async (int id, LibraryContext db, IC
 app.MapGet("/api/v2/ask", async (string q, IChatClient ai) =>
     (await ai.GetResponseAsync(q)).Text);
 
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<LibraryContext>();
-    db.Database.Migrate();
-    LibrarySeed.Seed(db);
-    LibrarySeed.SeedRatings(db);
-}
-
-// Construim indexul o singura data, la pornire (cateva secunde).
-// Trebuie dupa Migrate/Seed, ca sa existe cartile in baza de date.
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<LibraryContext>();
-    var index = app.Services.GetRequiredService<DocumentIndex>();
-    await index.BuildAsync(db, Path.Combine(app.Environment.ContentRootPath, "Docs", "regulament.md"));
-}
-
-// Configure the HTTP request pipeline.
-if (!app.Environment.IsDevelopment())
-{
-    app.UseExceptionHandler("/Home/Error");
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-    app.UseHsts();
-}
-
-app.UseHttpsRedirection();
-app.UseStaticFiles();
-app.UseRouting();
-app.UseAuthorization();
-
+// Rute MVC
 app.MapControllerRoute(
     name: "start",
     pattern: "start",
