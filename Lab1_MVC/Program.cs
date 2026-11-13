@@ -72,6 +72,9 @@ builder.Services.AddGrpcClient<ReaderRatings.ReaderRatingsClient>(o =>
 
 var app = builder.Build();
 
+builder.Services.AddSingleton<IChatClient>(
+    new OllamaApiClient(new Uri("http://localhost:11434"), "llama3.2"));
+
 // ==========================================
 // 2. INITIALIZARE BAZA DE DATE & RAG INDEX
 // ==========================================
